@@ -18,5 +18,8 @@ python-Levenshtein>=0.23.0
 # CLI界面 / CLI Interface
 rich>=13.0.0
 
+# GUI界面 / GUI Interface
+flet>=0.10.0
+
 # 工具 / Utilities
 python-dotenv>=1.0.0
