@@ -1,0 +1,22 @@
+# 核心依赖 / Core Dependencies
+openai-whisper>=20231117
+torch>=2.0.0
+torchaudio>=2.0.0
+
+# 音频处理 / Audio Processing
+sounddevice>=0.4.6
+wavio>=0.0.9
+pydub>=0.25.1
+ffmpeg-python>=0.2.0
+
+# TTS / Text-to-Speech
+edge-tts>=6.1.10
+
+# NLP & 评分 / NLP & Scoring
+python-Levenshtein>=0.23.0
+
+# CLI界面 / CLI Interface
+rich>=13.0.0
+
+# 工具 / Utilities
+python-dotenv>=1.0.0
