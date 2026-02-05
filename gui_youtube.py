@@ -345,8 +345,9 @@ class YouTubeFrame(tk.Frame):
             self.after(0, self.show_results)
             
         except Exception as e:
-            self.after(0, lambda: messagebox.showerror("错误", f"处理失败: {str(e)}"))
-            self.after(0, lambda: self.set_status(f"错误: {str(e)}"))
+            error_msg = str(e)
+            self.after(0, lambda msg=error_msg: messagebox.showerror("错误", f"处理失败: {msg}"))
+            self.after(0, lambda msg=error_msg: self.set_status(f"错误: {msg}"))
             
     def show_results(self):
         """显示处理结果"""
