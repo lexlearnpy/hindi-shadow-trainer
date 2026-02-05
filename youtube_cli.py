@@ -8,10 +8,38 @@ Usage:
     python youtube_cli.py --url "https://youtu.be/xxx" --full
 """
 import sys
+import os
 import argparse
+import shutil
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+
+# 检查并自动安装FFmpeg
+print("🔧 Checking FFmpeg...")
+from modules.youtube_handler import check_ffmpeg, setup_ffmpeg_path
+
+if not check_ffmpeg():
+    print("⚠️  FFmpeg not found. Auto-installing...")
+    try:
+        # 尝试从install_ffmpeg.py导入安装函数
+        sys.path.insert(0, str(Path(__file__).parent))
+        from install_ffmpeg import install_ffmpeg
+        if install_ffmpeg():
+            setup_ffmpeg_path()
+            print("✅ FFmpeg installed and configured!")
+        else:
+            print("❌ FFmpeg auto-installation failed.")
+            print("   Please run: python install_ffmpeg.py")
+            print("   Or download manually from: https://www.gyan.dev/ffmpeg/builds/")
+            sys.exit(1)
+    except Exception as e:
+        print(f"❌ Error installing FFmpeg: {e}")
+        print("   Please run: python install_ffmpeg.py")
+        sys.exit(1)
+else:
+    print("✅ FFmpeg is ready!")
+    setup_ffmpeg_path()
 
 from modules.youtube_handler import YouTubeHandler
 from modules.translator import HindiTranslator

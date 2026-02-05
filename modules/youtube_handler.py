@@ -8,8 +8,10 @@ YouTube Handler Module
 3. 音频切片
 """
 import sys
+import os
 import uuid
 import subprocess
+import shutil
 from pathlib import Path
 from pydub import AudioSegment
 
@@ -22,6 +24,29 @@ try:
 except ImportError:
     print("Error: yt_dlp not installed. Run: pip install yt-dlp")
     raise
+
+
+def setup_ffmpeg_path():
+    """设置FFmpeg路径（系统PATH或项目本地）"""
+    # 检查系统PATH
+    ffmpeg_exe = shutil.which('ffmpeg')
+    if ffmpeg_exe:
+        return True
+    
+    # 检查项目本地目录
+    base_dir = Path(__file__).parent.parent
+    local_ffmpeg_bin = base_dir / "ffmpeg" / "bin"
+    
+    if (local_ffmpeg_bin / "ffmpeg.exe").exists():
+        # 添加到环境变量
+        os.environ['PATH'] = str(local_ffmpeg_bin) + os.pathsep + os.environ.get('PATH', '')
+        # 同时设置pydub需要的路径
+        AudioSegment.converter = str(local_ffmpeg_bin / "ffmpeg.exe")
+        AudioSegment.ffmpeg = str(local_ffmpeg_bin / "ffmpeg.exe")
+        AudioSegment.ffprobe = str(local_ffmpeg_bin / "ffprobe.exe")
+        return True
+    
+    return False
 
 
 def check_ffmpeg():
@@ -41,6 +66,9 @@ class YouTubeHandler:
         self.segments_dir = Path(Config.TTS_TEMP_DIR) / "segments"
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         self.segments_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 尝试设置FFmpeg路径
+        setup_ffmpeg_path()
         self.has_ffmpeg = check_ffmpeg()
     
     def download_audio(self, url: str) -> dict:
