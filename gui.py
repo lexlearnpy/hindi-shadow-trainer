@@ -267,45 +267,58 @@ class HindiTrainerApp:
         def build_card():
             word = due_words[current_index[0]]
             
+            # 构建卡片内容
+            card_content = [
+                ft.Text(f"{current_index[0] + 1} / {len(due_words)}", 
+                       size=14, color=ft.colors.GREY_600),
+                ft.Text(word['word'], size=48, weight=ft.FontWeight.BOLD),
+                ft.Text(f"阶段 {word['review_stage']}", 
+                       size=14, color=ft.colors.GREY_600),
+                ft.Divider(),
+            ]
+            
+            if show_answer[0]:
+                # 显示答案和评分按钮
+                answer_content = [
+                    ft.Text(word['meaning'], size=32, color=ft.colors.GREEN),
+                ]
+                
+                if word.get('context_sentence'):
+                    answer_content.append(
+                        ft.Text(f"例句: {word['context_sentence']}", 
+                               size=16, color=ft.colors.GREY_600, italic=True)
+                    )
+                
+                answer_content.extend([
+                    ft.Divider(),
+                    ft.Text("记忆程度?", size=18),
+                    ft.Row(
+                        [
+                            ft.ElevatedButton("😵 忘了", 
+                                            on_click=lambda _: rate_word(0)),
+                            ft.ElevatedButton("😰 模糊", 
+                                            on_click=lambda _: rate_word(3)),
+                            ft.ElevatedButton("🙂 记得", 
+                                            on_click=lambda _: rate_word(4)),
+                            ft.ElevatedButton("😎 秒杀", 
+                                            on_click=lambda _: rate_word(5)),
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_EVENLY
+                    )
+                ])
+                
+                card_content.append(ft.Column(answer_content))
+            else:
+                # 显示答案按钮
+                card_content.append(
+                    ft.ElevatedButton("👀 显示答案", 
+                                    on_click=lambda _: show_answer_btn())
+                )
+            
             return ft.Card(
                 content=ft.Container(
                     content=ft.Column(
-                        [
-                            ft.Text(f"{current_index[0] + 1} / {len(due_words)}", 
-                                   size=14, color=ft.colors.GREY_600),
-                            ft.Text(word['word'], size=48, weight=ft.FontWeight.BOLD),
-                            ft.Text(f"阶段 {word['review_stage']}", 
-                                   size=14, color=ft.colors.GREY_600),
-                            
-                            ft.Divider(),
-                            
-                            if show_answer[0]:
-                                ft.Column([
-                                    ft.Text(word['meaning'], size=32, color=ft.colors.GREEN),
-                                    if word.get('context_sentence'):
-                                        ft.Text(f"例句: {word['context_sentence']}", 
-                                               size=16, color=ft.colors.GREY_600, italic=True),
-                                    
-                                    ft.Divider(),
-                                    ft.Text("记忆程度?", size=18),
-                                    ft.Row(
-                                        [
-                                            ft.ElevatedButton("😵 忘了", 
-                                                            on_click=lambda _: rate_word(0)),
-                                            ft.ElevatedButton("😰 模糊", 
-                                                            on_click=lambda _: rate_word(3)),
-                                            ft.ElevatedButton("🙂 记得", 
-                                                            on_click=lambda _: rate_word(4)),
-                                            ft.ElevatedButton("😎 秒杀", 
-                                                            on_click=lambda _: rate_word(5)),
-                                        ],
-                                        alignment=ft.MainAxisAlignment.SPACE_EVENLY
-                                    )
-                                ])
-                            else:
-                                ft.ElevatedButton("👀 显示答案", 
-                                                on_click=lambda _: show_answer_btn())
-                        ],
+                        card_content,
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                         spacing=20
                     ),
