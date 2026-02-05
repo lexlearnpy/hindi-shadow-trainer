@@ -25,8 +25,10 @@ if exist "venv\Scripts\activate.bat" (
     call venv\Scripts\activate.bat
 )
 
-:: Install dependencies if needed
+:: Install dependencies
 echo [INFO] Checking dependencies...
+
+:: Check and install required packages
 python -c "import tkinter" >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Tkinter not found! Please reinstall Python with Tk support.
@@ -34,7 +36,25 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo [OK] Dependencies ready
+:: Check yt-dlp
+python -c "import yt_dlp" >nul 2>&1
+if errorlevel 1 (
+    echo [INFO] Installing yt-dlp...
+    pip install yt-dlp -q
+)
+
+:: Check deep-translator
+python -c "import deep_translator" >nul 2>&1
+if errorlevel 1 (
+    echo [INFO] Installing deep-translator...
+    pip install deep-translator -q
+)
+
+:: Check other dependencies from requirements.txt
+echo [INFO] Installing other dependencies...
+pip install -r requirements.txt --quiet
+
+echo [OK] All dependencies ready
 echo.
 echo ========================================
 echo   Starting Modern GUI...
