@@ -23,3 +23,7 @@ flet>=0.10.0
 
 # Utilities
 python-dotenv>=1.0.0
+
+# YouTube Processing
+yt-dlp>=2023.12.30
+deep-translator>=1.11.4

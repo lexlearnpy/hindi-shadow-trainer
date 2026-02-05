@@ -39,6 +39,27 @@ class VocabDatabase:
                 )
             ''')
             
+            # 创建YouTube学习表
+            # Create YouTube lessons table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS youtube_lessons (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    video_url TEXT NOT NULL,
+                    video_title TEXT,
+                    segment_path TEXT NOT NULL,
+                    start_time REAL,
+                    end_time REAL,
+                    hindi_text TEXT,
+                    transliteration TEXT,
+                    english_text TEXT,
+                    chinese_text TEXT,
+                    review_stage INTEGER DEFAULT 0,
+                    next_review_date DATE,
+                    last_quality INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
             conn.commit()
     
     def add_word(self, word: str, meaning: str, 
@@ -163,6 +184,109 @@ class VocabDatabase:
             cursor = conn.cursor()
             cursor.execute('DELETE FROM vocab WHERE id = ?', (word_id,))
             conn.commit()
+    
+    # ========== YouTube Lessons Methods ==========
+    
+    def add_youtube_lesson(self, video_url: str, video_title: str, segment_path: str,
+                          start_time: float, end_time: float, hindi_text: str,
+                          transliteration: str, english_text: str, chinese_text: str) -> int:
+        """
+        添加YouTube学习片段
+        Add YouTube lesson segment
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # 设置明天为首次复习时间
+            tomorrow = date.today() + date.resolution
+            
+            cursor.execute('''
+                INSERT INTO youtube_lessons 
+                (video_url, video_title, segment_path, start_time, end_time,
+                 hindi_text, transliteration, english_text, chinese_text, next_review_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (video_url, video_title, segment_path, start_time, end_time,
+                  hindi_text, transliteration, english_text, chinese_text, tomorrow))
+            
+            conn.commit()
+            return cursor.lastrowid
+    
+    def get_due_youtube_lessons(self) -> List[Dict]:
+        """
+        获取今天需要复习的YouTube课程
+        Get YouTube lessons due for review today
+        """
+        today = date.today()
+        
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT * FROM youtube_lessons 
+                WHERE next_review_date <= ?
+                ORDER BY next_review_date ASC
+            ''', (today,))
+            
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+    
+    def update_youtube_review(self, lesson_id: int, quality: int,
+                              next_date: date, new_stage: int):
+        """
+        更新YouTube课程复习记录
+        Update YouTube lesson review record
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                UPDATE youtube_lessons 
+                SET review_stage = ?,
+                    next_review_date = ?,
+                    last_quality = ?
+                WHERE id = ?
+            ''', (new_stage, next_date, quality, lesson_id))
+            
+            conn.commit()
+    
+    def get_youtube_lessons_by_video(self, video_url: str) -> List[Dict]:
+        """
+        获取特定视频的所有学习片段
+        Get all lesson segments for a specific video
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT * FROM youtube_lessons 
+                WHERE video_url = ?
+                ORDER BY start_time ASC
+            ''', (video_url,))
+            
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+    
+    def get_all_youtube_videos(self) -> List[Dict]:
+        """
+        获取所有学习过的视频列表
+        Get list of all studied videos
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT video_url, video_title, COUNT(*) as segment_count,
+                       MIN(created_at) as first_study
+                FROM youtube_lessons
+                GROUP BY video_url, video_title
+                ORDER BY first_study DESC
+            ''')
+            
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
 
 
 if __name__ == "__main__":
