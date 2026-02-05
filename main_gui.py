@@ -22,7 +22,7 @@ from modules.database import VocabDatabase
 from modules.srs import SM2Algorithm
 
 
-# Modern Color Scheme
+# Modern Color Scheme (Hex format for Tkinter)
 COLORS = {
     'bg_dark': '#0f0f23',
     'bg_card': '#1a1a2e',
@@ -37,7 +37,7 @@ COLORS = {
     'success': '#00d9a3',
     'warning': '#ffb347',
     'error': '#ff6b6b',
-    'border': 'rgba(255,255,255,0.1)',
+    'border': '#2a2a45',  # Tkinter doesn't support rgba
 }
 
 
