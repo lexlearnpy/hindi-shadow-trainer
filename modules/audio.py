@@ -4,6 +4,8 @@ Audio management module - recording and playback
 """
 import sys
 import wave
+import threading
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -11,10 +13,17 @@ import sounddevice as sd
 import numpy as np
 from pydub import AudioSegment
 from pydub.playback import play
+from rich.console import Console
+from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
+from rich.live import Live
+from rich.layout import Layout
 
 # 添加项目根目录到路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import Config
+
+console = Console()
 
 
 class AudioManager:
@@ -24,6 +33,8 @@ class AudioManager:
         self.sample_rate = Config.AUDIO_SAMPLE_RATE
         self.channels = Config.AUDIO_CHANNELS
         self.dtype = 'int16'
+        self.stop_recording = threading.Event()
+        self.recording_data = []
         
     def calculate_duration(self, text: str) -> int:
         """
@@ -41,10 +52,67 @@ class AudioManager:
         char_duration = len(text) * Config.AUDIO_DURATION_PER_CHAR
         return max(base_duration, int(char_duration))
     
+    def _audio_callback(self, indata, frames, time_info, status):
+        """音频回调函数，实时收集录音数据"""
+        if status:
+            print(f"音频状态: {status}")
+        self.recording_data.append(indata.copy())
+    
+    def _create_ui(self, duration, elapsed_time, volume_level):
+        """创建录音UI界面"""
+        layout = Layout()
+        
+        # 顶部提示
+        header = Panel(
+            f"[bold red]🔴 正在录音...[/bold red]\n"
+            f"[dim]按 [bold]空格键[/bold] 或 [bold]Enter[/bold] 结束录音[/dim]",
+            border_style="red"
+        )
+        
+        # 进度条
+        progress = min(elapsed_time / duration, 1.0)
+        progress_bar = "█" * int(progress * 30) + "░" * (30 - int(progress * 30))
+        
+        # 音量可视化
+        volume_bar = "▓" * int(volume_level * 20) + "░" * (20 - int(volume_level * 20))
+        
+        content = f"""
+[bold]时间:[/bold] {elapsed_time:.1f}s / {duration}s
+[bold]进度:[/bold] [{progress_bar}] {progress*100:.0f}%
+
+[bold]音量:[/bold] [{volume_bar}] {volume_level*100:.0f}%
+
+[cyan]💡 提示: 朗读时保持音量在绿色区域最佳[/cyan]
+        """
+        
+        panel = Panel(
+            content,
+            title="🎙️ 录音中",
+            border_style="cyan"
+        )
+        
+        return panel
+    
+    def _monitor_keyboard(self):
+        """监控键盘输入（在新线程中运行）"""
+        try:
+            import msvcrt  # Windows only
+            while not self.stop_recording.is_set():
+                if msvcrt.kbhit():
+                    key = msvcrt.getch()
+                    # 空格键(32) 或 Enter键(13)
+                    if key in [b' ', b'\r']:
+                        self.stop_recording.set()
+                        break
+                time.sleep(0.1)
+        except ImportError:
+            # Linux/Mac 使用其他方式
+            pass
+    
     def record(self, duration: int, output_path: str) -> bool:
         """
-        录制音频
-        Record audio from microphone
+        录制音频 - 带UI界面和按键结束功能
+        Record audio with UI and keyboard control
         
         Args:
             duration: 录音时长（秒）
@@ -54,33 +122,69 @@ class AudioManager:
             是否成功 / Success status
         """
         try:
-            print(f"🎙️  {Config.get_text('recording_ready')}")
+            console.print(f"\n🎙️  {Config.get_text('recording_ready')}")
+            console.print("[dim]准备开始，请按任意键...[/dim]")
+            input()  # 等待用户准备就绪
             
-            # 录制音频数据
-            # Record audio data
-            recording = sd.rec(
-                int(duration * self.sample_rate),
+            # 重置状态
+            self.stop_recording.clear()
+            self.recording_data = []
+            start_time = time.time()
+            
+            # 启动键盘监听线程
+            keyboard_thread = threading.Thread(target=self._monitor_keyboard)
+            keyboard_thread.daemon = True
+            keyboard_thread.start()
+            
+            # 开始录音
+            stream = sd.InputStream(
                 samplerate=self.sample_rate,
                 channels=self.channels,
-                dtype=self.dtype
+                dtype=self.dtype,
+                callback=self._audio_callback
             )
             
-            # 等待录音完成
-            # Wait for recording to complete
-            sd.wait()
+            with stream:
+                with Live(refresh_per_second=10) as live:
+                    while not self.stop_recording.is_set():
+                        elapsed = time.time() - start_time
+                        
+                        # 检查是否超时
+                        if elapsed >= duration:
+                            break
+                        
+                        # 计算音量
+                        volume = 0.0
+                        if self.recording_data:
+                            recent_data = np.concatenate(self.recording_data[-5:]) if len(self.recording_data) >= 5 else np.concatenate(self.recording_data)
+                            volume = min(np.abs(recent_data).mean() / 32768.0 * 5, 1.0)  # 放大音量显示
+                        
+                        # 更新UI
+                        ui = self._create_ui(duration, elapsed, volume)
+                        live.update(ui)
+                        
+                        time.sleep(0.1)
             
-            # 保存为WAV文件
-            # Save as WAV file
-            with wave.open(output_path, 'wb') as wf:
-                wf.setnchannels(self.channels)
-                wf.setsampwidth(2)  # int16 = 2 bytes
-                wf.setframerate(self.sample_rate)
-                wf.writeframes(recording.tobytes())
-            
-            return True
-            
+            # 合并录音数据
+            if self.recording_data:
+                recording = np.concatenate(self.recording_data, axis=0)
+                
+                # 保存为WAV文件
+                with wave.open(output_path, 'wb') as wf:
+                    wf.setnchannels(self.channels)
+                    wf.setsampwidth(2)  # int16 = 2 bytes
+                    wf.setframerate(self.sample_rate)
+                    wf.writeframes(recording.tobytes())
+                
+                actual_duration = len(recording) / self.sample_rate
+                console.print(f"[green]✅ 录音完成！时长: {actual_duration:.1f}秒[/green]\n")
+                return True
+            else:
+                console.print("[red]❌ 没有录音数据[/red]")
+                return False
+                
         except Exception as e:
-            print(f"❌ {Config.get_text('error_microphone')}: {e}")
+            console.print(f"[red]❌ {Config.get_text('error_microphone')}: {e}[/red]")
             return False
     
     def play(self, audio_path: str) -> bool:
