@@ -9,6 +9,7 @@ YouTube Handler Module
 """
 import sys
 import uuid
+import subprocess
 from pathlib import Path
 from pydub import AudioSegment
 
@@ -23,6 +24,15 @@ except ImportError:
     raise
 
 
+def check_ffmpeg():
+    """检查是否安装了FFmpeg"""
+    try:
+        subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
+
 class YouTubeHandler:
     """YouTube处理器"""
     
@@ -31,6 +41,7 @@ class YouTubeHandler:
         self.segments_dir = Path(Config.TTS_TEMP_DIR) / "segments"
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         self.segments_dir.mkdir(parents=True, exist_ok=True)
+        self.has_ffmpeg = check_ffmpeg()
     
     def download_audio(self, url: str) -> dict:
         """
@@ -50,17 +61,31 @@ class YouTubeHandler:
         """
         print(f"📥 Downloading audio from: {url}")
         
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '320',
-            }],
-            'outtmpl': str(self.temp_dir / '%(id)s.%(ext)s'),
-            'quiet': True,
-            'no_warnings': True
-        }
+        if self.has_ffmpeg:
+            # 使用FFmpeg转码为MP3
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '320',
+                }],
+                'outtmpl': str(self.temp_dir / '%(id)s.%(ext)s'),
+                'quiet': True,
+                'no_warnings': True
+            }
+            extension = 'mp3'
+        else:
+            # 没有FFmpeg，直接下载M4A格式
+            print("⚠️  FFmpeg not found, downloading M4A format instead")
+            print("   To install FFmpeg, run: install_ffmpeg.bat")
+            ydl_opts = {
+                'format': 'bestaudio[ext=m4a]/bestaudio',
+                'outtmpl': str(self.temp_dir / '%(id)s.%(ext)s'),
+                'quiet': True,
+                'no_warnings': True
+            }
+            extension = 'm4a'
         
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -69,7 +94,7 @@ class YouTubeHandler:
                 video_id = info['id']
                 title = info.get('title', 'Unknown')
                 duration = info.get('duration', 0)
-                audio_path = self.temp_dir / f"{video_id}.mp3"
+                audio_path = self.temp_dir / f"{video_id}.{extension}"
                 
                 print(f"✅ Downloaded: {title}")
                 print(f"⏱️  Duration: {duration}s")
@@ -83,6 +108,11 @@ class YouTubeHandler:
                 }
         except Exception as e:
             print(f"❌ Download failed: {e}")
+            if "ffprobe and ffmpeg not found" in str(e):
+                print("\n💡 To fix this:")
+                print("   1. Run: install_ffmpeg.bat")
+                print("   2. Or download FFmpeg manually from: https://www.gyan.dev/ffmpeg/builds/")
+                print("   3. Add FFmpeg bin folder to your PATH")
             raise
     
     def extract_segment(self, audio_path: str, start: float, end: float) -> str:
@@ -98,7 +128,12 @@ class YouTubeHandler:
         Returns:
             str: 片段文件路径
         """
-        audio = AudioSegment.from_mp3(audio_path)
+        # 根据文件格式选择加载方法
+        if audio_path.endswith('.m4a'):
+            audio = AudioSegment.from_file(audio_path, format="m4a")
+        else:
+            audio = AudioSegment.from_mp3(audio_path)
+        
         segment = audio[int(start*1000):int(end*1000)]
         
         segment_id = str(uuid.uuid4())[:8]
