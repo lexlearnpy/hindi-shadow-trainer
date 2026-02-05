@@ -262,8 +262,9 @@ class YouTubeFrame(tk.Frame):
             messagebox.showwarning("警告", "请输入YouTube视频链接")
             return
             
-        # 显示进度卡片
-        self.progress_card.pack(fill=tk.X, pady=10, before=self.results_frame.master)
+        # 显示进度卡片（在输入区域和结果区域之间）
+        if not self.progress_card.winfo_viewable():
+            self.progress_card.pack(fill=tk.X, pady=10, after=self.url_entry.master.master)
         
         # 重置进度
         for item in self.progress_items:
